@@ -15,7 +15,7 @@ import { getCurrentMailbox, setCurrentMailbox, loadCurrentMailbox, clearCurrentM
 import { renderPager, sliceByPage, prevPage, nextPage, resetPager, setView, isSentViewActive, renderEmailItem, markViewLoaded, isFirstLoad } from './modules/app/email-list.js';
 import { renderMailboxList, renderMbPager, getCurrentPage, setCurrentPage, getPageSize, prevMbPage, nextMbPage, resetMbPage, setSearchTerm, getSearchTerm, setLoading, isLoadingMailboxes, setLastCount, getLastCount } from './modules/app/mailbox-list.js';
 import { initSessionFromCache, validateSession, isGuest, isAdmin, applySessionUI, initGuestMode } from './modules/app/session.js';
-import { loadDomains, getStoredLength, saveLength, updateRangeProgress, getSelectedDomainIndex, populateDomains, STORAGE_KEYS } from './modules/app/domains.js';
+import { loadDomains, getStoredLength, saveLength, updateRangeProgress, getSelectedDomainIndex, populateDomains, STORAGE_KEYS, updateCustomInputPlaceholder } from './modules/app/domains.js';
 import { initCompose, showSentEmailDetail } from './modules/app/compose.js';
 import { showEmailDetail, deleteEmailById, deleteSentById, copyFromEmailList, prefetchEmails } from './modules/app/email-viewer.js';
 import { generateMailbox, generateNameMailbox, createCustomMailbox, updateEmailDisplay, selectMailboxAddress, toggleMailboxPin, deleteMailboxAddress, copyMailboxAddress, clearAllEmails, logout } from './modules/app/mailbox-actions.js';
@@ -167,6 +167,7 @@ if (lenRange && lenVal) { lenRange.value = String(getStoredLength()); lenVal.tex
 // 自定义邮箱
 if (els.toggleCustom) els.toggleCustom.onclick = () => { if (els.customOverlay) { const vis = els.customOverlay.style.display !== 'none'; els.customOverlay.style.display = vis ? 'none' : 'flex'; if (!vis) setTimeout(() => els.customLocalOverlay?.focus(), 50); }};
 if (els.createCustomOverlay) els.createCustomOverlay.onclick = () => createCustomMailbox(els, domainSelect, api, showToast, loadMailboxes);
+if (domainSelect) domainSelect.addEventListener('change', () => updateCustomInputPlaceholder(domainSelect, els.customLocalOverlay));
 
 // 侧边栏
 if (els.sidebarToggle) { els.sidebarToggle.onclick = () => { els.sidebar?.classList.toggle('collapsed'); els.container?.classList.toggle('sidebar-collapsed'); const c = els.sidebar?.classList.contains('collapsed'); if (els.sidebarToggleIcon) els.sidebarToggleIcon.textContent = c ? '▶' : '◀'; localStorage.setItem('sidebar-collapsed', c ? '1' : '0'); }; if (localStorage.getItem('sidebar-collapsed') === '1') { els.sidebar?.classList.add('collapsed'); els.container?.classList.add('sidebar-collapsed'); if (els.sidebarToggleIcon) els.sidebarToggleIcon.textContent = '▶'; }}
@@ -200,6 +201,7 @@ initCompose(els, api, showToast);
   if (!s) { clearCurrentMailbox(); stopAutoRefresh(); location.replace('/html/login.html'); return; }
   if (s.role === 'guest') { initGuestMode(); if (domainSelect) { domainSelect.innerHTML = '<option value="0">example.com</option>'; domainSelect.disabled = true; } populateDomains(['example.com'], domainSelect); }
   else await loadDomains(domainSelect, api);
+  updateCustomInputPlaceholder(domainSelect, els.customLocalOverlay);
   try { const qr = await api('/api/user/quota'); const q = await qr.json(); const el = document.getElementById('quota'); if (el && q) { el.textContent = isAdmin() ? `${q.total || 0} 邮箱` : `${q.used || 0} / ${q.limit || 0}`; }} catch(_) {}
   await loadMailboxes();
   

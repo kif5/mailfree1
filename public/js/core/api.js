@@ -113,18 +113,27 @@ export async function getDomains() {
  * 生成随机邮箱
  * @param {number} length - 长度
  * @param {number} domainIndex - 域名索引
+ * @param {string} wildcardSubdomain - 泛域名子域
  */
-export async function generateMailbox(length = 8, domainIndex = 0) {
-  return get(`/api/generate?length=${length}&domainIndex=${domainIndex}`);
+export async function generateMailbox(length = 8, domainIndex = 0, wildcardSubdomain = '') {
+  const query = new URLSearchParams({
+    length: String(length),
+    domainIndex: String(domainIndex)
+  });
+  if (wildcardSubdomain) query.set('wildcardSubdomain', wildcardSubdomain);
+  return get(`/api/generate?${query.toString()}`);
 }
 
 /**
  * 创建自定义邮箱
  * @param {string} local - 本地部分
  * @param {number} domainIndex - 域名索引
+ * @param {string} wildcardSubdomain - 泛域名子域
  */
-export async function createMailbox(local, domainIndex = 0) {
-  return post('/api/create', { local, domainIndex });
+export async function createMailbox(local, domainIndex = 0, wildcardSubdomain = '') {
+  const payload = { local, domainIndex };
+  if (wildcardSubdomain) payload.wildcardSubdomain = wildcardSubdomain;
+  return post('/api/create', payload);
 }
 
 /**

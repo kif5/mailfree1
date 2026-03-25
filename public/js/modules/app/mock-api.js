@@ -3,6 +3,8 @@
  * @module modules/app/mock-api
  */
 
+import { getWildcardRootDomain, isValidWildcardSubdomain, isWildcardDomain } from './domains.js';
+
 // 模拟状态
 export const MOCK_STATE = {
   domains: ['example.com'],
@@ -10,6 +12,16 @@ export const MOCK_STATE = {
   emailsByMailbox: new Map(),
   nextMailboxId: 100
 };
+
+function resolveMockDomain(domain, wildcardSubdomain = '') {
+  const normalizedDomain = String(domain || '').trim().toLowerCase();
+  if (!isWildcardDomain(normalizedDomain)) return normalizedDomain || 'example.com';
+  const subdomain = String(wildcardSubdomain || '').trim().toLowerCase() || mockGenerateId(6);
+  if (!isValidWildcardSubdomain(subdomain)) {
+    throw new Error('泛域名子域仅支持字母和数字');
+  }
+  return `${subdomain}.${getWildcardRootDomain(normalizedDomain)}`;
+}
 
 /**
  * 生成随机 ID
@@ -155,7 +167,8 @@ export async function mockApi(path, options = {}) {
   if (url.pathname === '/api/generate') {
     const len = Number(url.searchParams.get('length') || '8');
     const id = mockGenerateId(len);
-    const domain = MOCK_STATE.domains[Number(url.searchParams.get('domainIndex') || 0)] || 'example.com';
+    const domainPattern = MOCK_STATE.domains[Number(url.searchParams.get('domainIndex') || 0)] || 'example.com';
+    const domain = resolveMockDomain(domainPattern, url.searchParams.get('wildcardSubdomain') || '');
     const email = `${id}@${domain}`;
     const newMailbox = { 
       id: MOCK_STATE.nextMailboxId++,
@@ -273,7 +286,8 @@ export async function mockApi(path, options = {}) {
         return new Response('非法用户名', { status: 400 });
       }
       const domainIndex = Number(body.domainIndex || 0);
-      const domain = MOCK_STATE.domains[Math.max(0, Math.min(MOCK_STATE.domains.length - 1, domainIndex))] || 'example.com';
+      const domainPattern = MOCK_STATE.domains[Math.max(0, Math.min(MOCK_STATE.domains.length - 1, domainIndex))] || 'example.com';
+      const domain = resolveMockDomain(domainPattern, body.wildcardSubdomain || '');
       const email = `${local}@${domain}`;
       
       if (MOCK_STATE.mailboxes.find(m => m.address === email)) {

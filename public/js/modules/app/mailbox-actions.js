@@ -6,7 +6,7 @@
 import { setCurrentMailbox, getCurrentMailbox, clearCurrentMailbox, setCurrentMailboxInfo } from './mailbox-state.js';
 import { setButtonLoading, restoreButton } from './ui-helpers.js';
 import { generateRandomId } from './random-name.js';
-import { getStoredLength, saveLength, getSelectedDomainIndex } from './domains.js';
+import { getStoredLength, saveLength, getSelectedDomainIndex, getSelectedDomain, parseCustomMailboxInput } from './domains.js';
 import { startAutoRefresh, stopAutoRefresh } from './auto-refresh.js';
 import { resetPager } from './email-list.js';
 import { resetMbPage } from './mailbox-list.js';
@@ -128,19 +128,26 @@ export async function generateNameMailbox(elements, lenRange, domainSelect, api,
  */
 export async function createCustomMailbox(elements, domainSelect, api, showToast, loadMailboxes) {
   const { customLocalOverlay, customOverlay } = elements;
+  const selectedDomain = getSelectedDomain(domainSelect);
+  let local = '';
+  let wildcardSubdomain = '';
   
   try {
-    const local = (customLocalOverlay?.value || '').trim();
-    if (!/^[A-Za-z0-9._-]{1,64}$/.test(local)) {
-      showToast('用户名不合法，仅限字母/数字/._-', 'warn');
-      return;
-    }
+    ({ local, wildcardSubdomain } = parseCustomMailboxInput(customLocalOverlay?.value || '', selectedDomain));
+  } catch(e) {
+    showToast(e.message || '输入格式错误', 'warn');
+    return;
+  }
+
+  try {
     const domainIndex = getSelectedDomainIndex(domainSelect);
+    const payload = { local, domainIndex };
+    if (wildcardSubdomain) payload.wildcardSubdomain = wildcardSubdomain;
     
     const r = await api('/api/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ local, domainIndex })
+      body: JSON.stringify(payload)
     });
     
     if (!r.ok) throw new Error(await r.text());

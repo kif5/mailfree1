@@ -16,6 +16,9 @@ export function extractEmail(addr) {
   return s.split(/\s/)[0] || s;
 }
 
+const WILDCARD_DOMAIN_RE = /^\*\.[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i;
+const WILDCARD_SUBDOMAIN_RE = /^[a-z0-9]+$/i;
+
 /**
  * 生成指定长度的随机ID
  * @param {number} length - ID长度，默认为8
@@ -39,6 +42,53 @@ export function isValidEmail(email) {
   if (!email || typeof email !== 'string') return false;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email.trim());
+}
+
+/**
+ * 标准化域名
+ * @param {string} domain - 域名
+ * @returns {string}
+ */
+export function normalizeDomainName(domain) {
+  return String(domain || '').trim().toLowerCase();
+}
+
+/**
+ * 是否为泛域名模板
+ * @param {string} domain - 域名
+ * @returns {boolean}
+ */
+export function isWildcardDomainPattern(domain) {
+  return WILDCARD_DOMAIN_RE.test(normalizeDomainName(domain));
+}
+
+/**
+ * 是否为合法泛域名子域
+ * @param {string} subdomain - 子域
+ * @returns {boolean}
+ */
+export function isValidWildcardSubdomain(subdomain) {
+  return WILDCARD_SUBDOMAIN_RE.test(String(subdomain || '').trim());
+}
+
+/**
+ * 将域名模板解析为真实域名
+ * @param {string} domain - 域名或泛域名模板
+ * @param {string} wildcardSubdomain - 泛域名子域
+ * @returns {string}
+ */
+export function resolveMailboxDomain(domain, wildcardSubdomain = '') {
+  const normalizedDomain = normalizeDomainName(domain);
+  if (!normalizedDomain) throw new Error('域名不能为空');
+  if (!isWildcardDomainPattern(normalizedDomain)) return normalizedDomain;
+
+  const subdomain = String(wildcardSubdomain || '').trim().toLowerCase();
+  if (!subdomain) throw new Error('泛域名缺少子域');
+  if (!isValidWildcardSubdomain(subdomain)) {
+    throw new Error('泛域名子域仅支持字母和数字');
+  }
+
+  return `${subdomain}.${normalizedDomain.slice(2)}`;
 }
 
 /**
