@@ -8,6 +8,9 @@ import { isGuest } from './session.js';
 
 // 域名列表
 let domains = [];
+const LOCAL_PART_RE = /^[A-Za-z0-9._-]{1,64}$/;
+const WILDCARD_DOMAIN_RE = /^\*\.[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i;
+const WILDCARD_SUBDOMAIN_RE = /^[A-Za-z0-9]+$/;
 
 // 存储键
 export const STORAGE_KEYS = {
@@ -24,11 +27,57 @@ export function getDomains() {
 }
 
 /**
+ * 标准化域名
+ * @param {string} domain - 域名
+ * @returns {string}
+ */
+export function normalizeDomain(domain) {
+  return String(domain || '').trim().toLowerCase();
+}
+
+/**
+ * 是否为泛域名模板
+ * @param {string} domain - 域名
+ * @returns {boolean}
+ */
+export function isWildcardDomain(domain) {
+  return WILDCARD_DOMAIN_RE.test(normalizeDomain(domain));
+}
+
+/**
+ * 获取泛域名根域
+ * @param {string} domain - 泛域名模板
+ * @returns {string}
+ */
+export function getWildcardRootDomain(domain) {
+  const normalized = normalizeDomain(domain);
+  return isWildcardDomain(normalized) ? normalized.slice(2) : normalized;
+}
+
+/**
+ * 校验邮箱用户名
+ * @param {string} local - 用户名
+ * @returns {boolean}
+ */
+export function isValidMailboxLocal(local) {
+  return LOCAL_PART_RE.test(String(local || '').trim());
+}
+
+/**
+ * 校验泛域名子域
+ * @param {string} subdomain - 子域
+ * @returns {boolean}
+ */
+export function isValidWildcardSubdomain(subdomain) {
+  return WILDCARD_SUBDOMAIN_RE.test(String(subdomain || '').trim());
+}
+
+/**
  * 设置域名列表
  * @param {Array} list - 域名列表
  */
 export function setDomains(list) {
-  domains = Array.isArray(list) ? list : [];
+  domains = Array.isArray(list) ? list.map(normalizeDomain).filter(Boolean) : [];
 }
 
 /**
@@ -38,7 +87,7 @@ export function setDomains(list) {
  */
 export function populateDomains(domainList, selectElement) {
   if (!selectElement) return;
-  const list = Array.isArray(domainList) ? domainList : [];
+  const list = Array.isArray(domainList) ? domainList.map(normalizeDomain).filter(Boolean) : [];
   selectElement.innerHTML = list.map((d, i) => `<option value="${i}">${d}</option>`).join('');
   
   const stored = localStorage.getItem(STORAGE_KEYS.domain) || '';
@@ -139,6 +188,74 @@ export function getSelectedDomainIndex(selectElement) {
 }
 
 /**
+ * 获取当前选中的域名
+ * @param {HTMLSelectElement} selectElement - 下拉框元素
+ * @returns {string}
+ */
+export function getSelectedDomain(selectElement) {
+  const index = getSelectedDomainIndex(selectElement);
+  return normalizeDomain(domains[index] || domains[0] || '');
+}
+
+/**
+ * 解析自定义邮箱输入
+ * 普通域名：输入用户名
+ * 泛域名：输入 用户名@子域 或 用户名@子域.根域
+ * @param {string} inputValue - 输入内容
+ * @param {string} domain - 当前选中域名
+ * @returns {{ local: string, wildcardSubdomain: string }}
+ */
+export function parseCustomMailboxInput(inputValue, domain) {
+  const value = String(inputValue || '').trim();
+  const selectedDomain = normalizeDomain(domain);
+
+  if (!isWildcardDomain(selectedDomain)) {
+    if (!isValidMailboxLocal(value)) {
+      throw new Error('用户名不合法，仅限字母/数字/._-');
+    }
+    return { local: value.toLowerCase(), wildcardSubdomain: '' };
+  }
+
+  const rootDomain = getWildcardRootDomain(selectedDomain);
+  const parts = value.split('@');
+  if (parts.length !== 2) {
+    throw new Error(`泛域名请按 "用户名@子域" 或 "用户名@子域.${rootDomain}" 格式输入`);
+  }
+
+  const local = parts[0].trim();
+  let subdomain = parts[1].trim().toLowerCase();
+
+  if (subdomain.endsWith('.' + rootDomain)) {
+    subdomain = subdomain.slice(0, -(rootDomain.length + 1));
+  }
+
+  if (!isValidMailboxLocal(local)) {
+    throw new Error('用户名不合法，仅限字母/数字/._-');
+  }
+  if (!isValidWildcardSubdomain(subdomain)) {
+    throw new Error('泛域名子域不合法，仅限字母和数字');
+  }
+
+  return {
+    local: local.toLowerCase(),
+    wildcardSubdomain: subdomain
+  };
+}
+
+/**
+ * 根据选中域名更新自定义输入提示
+ * @param {HTMLSelectElement} selectElement - 域名下拉框
+ * @param {HTMLInputElement} inputElement - 自定义输入框
+ */
+export function updateCustomInputPlaceholder(selectElement, inputElement) {
+  if (!inputElement) return;
+  const domain = getSelectedDomain(selectElement);
+  inputElement.placeholder = isWildcardDomain(domain)
+    ? `输入 用户名@子域 或 用户名@子域.${getWildcardRootDomain(domain)}`
+    : '仅限字母/数字/._-';
+}
+
+/**
  * 更新范围滑块进度
  * @param {HTMLInputElement} input - 滑块元素
  */
@@ -159,6 +276,14 @@ export default {
   getStoredLength,
   saveLength,
   getSelectedDomainIndex,
+  getSelectedDomain,
+  normalizeDomain,
+  isWildcardDomain,
+  getWildcardRootDomain,
+  isValidMailboxLocal,
+  isValidWildcardSubdomain,
+  parseCustomMailboxInput,
+  updateCustomInputPlaceholder,
   updateRangeProgress,
   STORAGE_KEYS
 };

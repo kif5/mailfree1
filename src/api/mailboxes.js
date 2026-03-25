@@ -5,7 +5,7 @@
 
 import { getJwtPayload, isStrictAdmin, errorResponse } from './helpers.js';
 import { buildMockMailboxes, MOCK_DOMAINS } from './mock.js';
-import { extractEmail, generateRandomId } from '../utils/common.js';
+import { extractEmail, generateRandomId, isWildcardDomainPattern, resolveMailboxDomain } from '../utils/common.js';
 import { getCachedUserQuota, getCachedSystemStat } from '../utils/cache.js';
 import {
   getOrCreateMailboxId,
@@ -27,6 +27,12 @@ import { handleMailboxAdminApi } from './mailboxAdmin.js';
  */
 export async function handleMailboxesApi(request, db, mailDomains, url, path, options) {
   const isMock = !!options.mockOnly;
+  const buildResolvedDomain = (domainPattern, requestedSubdomain = '') => {
+    const fallbackSubdomain = isWildcardDomainPattern(domainPattern)
+      ? String(requestedSubdomain || '').trim().toLowerCase() || generateRandomId(6)
+      : '';
+    return resolveMailboxDomain(domainPattern, fallbackSubdomain);
+  };
 
   // 返回域名列表给前端
   if (path === '/api/domains' && request.method === 'GET') {
@@ -42,7 +48,13 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
     const domains = isMock ? MOCK_DOMAINS : (Array.isArray(mailDomains) ? mailDomains : [(mailDomains || 'temp.example.com')]);
     const domainIdx = Math.max(0, Math.min(domains.length - 1, Number(url.searchParams.get('domainIndex') || 0)));
     const chosenDomain = domains[domainIdx] || domains[0];
-    const email = `${randomId}@${chosenDomain}`;
+    let email = '';
+    try {
+      const resolvedDomain = buildResolvedDomain(chosenDomain, url.searchParams.get('wildcardSubdomain') || '');
+      email = `${randomId}@${resolvedDomain}`;
+    } catch (e) {
+      return errorResponse(String(e?.message || '域名无效'), 400);
+    }
     
     if (!isMock) {
       try {
@@ -71,9 +83,10 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
         const domains = MOCK_DOMAINS;
         const domainIdx = Math.max(0, Math.min(domains.length - 1, Number(body.domainIndex || 0)));
         const chosenDomain = domains[domainIdx] || domains[0];
-        const email = `${local}@${chosenDomain}`;
+        const resolvedDomain = buildResolvedDomain(chosenDomain, body.wildcardSubdomain || '');
+        const email = `${local}@${resolvedDomain}`;
         return Response.json({ email, expires: Date.now() + 3600000 });
-      } catch (_) { return errorResponse('Bad Request', 400); }
+      } catch (e) { return errorResponse(String(e?.message || 'Bad Request'), 400); }
     }
     
     try {
@@ -84,7 +97,8 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
       const domains = Array.isArray(mailDomains) ? mailDomains : [(mailDomains || 'temp.example.com')];
       const domainIdx = Math.max(0, Math.min(domains.length - 1, Number(body.domainIndex || 0)));
       const chosenDomain = domains[domainIdx] || domains[0];
-      const email = `${local}@${chosenDomain}`;
+      const resolvedDomain = buildResolvedDomain(chosenDomain, body.wildcardSubdomain || '');
+      const email = `${local}@${resolvedDomain}`;
       
       try {
         const payload = getJwtPayload(request, options);
@@ -98,7 +112,7 @@ export async function handleMailboxesApi(request, db, mailDomains, url, path, op
       } catch (e) {
         return errorResponse(String(e?.message || '创建失败'), 400);
       }
-    } catch (_) { return errorResponse('Bad Request', 400); }
+    } catch (e) { return errorResponse(String(e?.message || 'Bad Request'), 400); }
   }
 
   // 获取邮箱详细信息（转发、收藏等）

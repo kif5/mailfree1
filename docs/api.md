@@ -135,6 +135,7 @@ curl "https://your.domain/api/session?admin_token=<JWT_TOKEN>"
 |------|------|------|
 | `length` | number | 可选，随机字符串长度 |
 | `domainIndex` | number | 可选，选择域名索引（默认 0） |
+| `wildcardSubdomain` | string | 可选，若所选域名为 `*.example.com`，可指定子域名，仅允许字母和数字；不传时服务端自动生成 |
 
 **返回：**
 ```json
@@ -151,7 +152,8 @@ curl "https://your.domain/api/session?admin_token=<JWT_TOKEN>"
 ```json
 {
   "local": "myname",
-  "domainIndex": 0
+  "domainIndex": 0,
+  "wildcardSubdomain": "abc123"
 }
 ```
 
@@ -161,6 +163,12 @@ curl "https://your.domain/api/session?admin_token=<JWT_TOKEN>"
   "email": "myname@example.com",
   "expires": 1704067200000
 }
+
+当 `GET /api/domains` 返回的域名列表中包含 `*.m.kif.cc.cd` 这类泛域名模板时：
+
+- `POST /api/create` 可传 `wildcardSubdomain`，实际创建为 `local@wildcardSubdomain.m.kif.cc.cd`
+- `wildcardSubdomain` 仅支持字母和数字
+- 若未传 `wildcardSubdomain`，服务端会自动生成一个随机子域名
 ```
 
 ### GET /api/mailboxes
